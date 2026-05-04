@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MF Inspect">
+<meta name="theme-color" content="#185FA5">
+<meta name="mobile-web-app-capable" content="yes">
+<script>
+// Inline service worker for offline support
+if('serviceWorker' in navigator){
+  const sw = `
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open('mf-v1').then(c => c.add(location.href))
+  );
+});
+self.addEventListener('fetch', e => {
+  e.respondWith(
+    caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match(e.request)))
+  );
+});
+`;
+  const blob = new Blob([sw], {type:'application/javascript'});
+  const url = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(url).catch(()=>{});
+}
+// Generate apple-touch-icon from SVG
+(function(){
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" rx="38" fill="#185FA5"/><rect x="36" y="48" width="108" height="92" rx="10" fill="white" opacity=".18"/><rect x="48" y="64" width="84" height="10" rx="4" fill="white"/><rect x="48" y="82" width="84" height="10" rx="4" fill="white"/><rect x="48" y="100" width="56" height="10" rx="4" fill="white"/><circle cx="128" cy="118" r="24" fill="#4CAF50"/><polyline points="118,118 126,128 142,110" stroke="white" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const img=new Image();
+  img.onload=function(){
+    const c=document.createElement('canvas');c.width=180;c.height=180;
+    c.getContext('2d').drawImage(img,0,0);
+    const l=document.createElement('link');l.rel='apple-touch-icon';l.href=c.toDataURL('image/png');
+    document.head.appendChild(l);
+  };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+})();
+</script>
+
+<title>MF Inspect</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #185FA5;
+    --blue-dark: #0C447C;
+    --blue-light: #E6F1FB;
+    --green: #3B6D11;
+    --green-bg: #EAF3DE;
+    --green-border: #639922;
+    --red: #A32D2D;
+    --red-bg: #FCEBEB;
+    --red-border: #E24B4A;
+    --gray-50: #F8F8F7;
+    --gray-100: #EFEFED;
+    --gray-200: #D3D1C7;
+    --gray-400: #888780;
+    --gray-600: #5F5E5A;
+    --gray-900: #1C1C1B;
+    --border: #E0DED8;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-900);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .page-header {
+    background: white;
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    gap: 12px;
+  }
+
+  .logo-area h1 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--blue);
+    letter-spacing: -0.01em;
+  }
+  .logo-area p {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 1px;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .btn {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: white;
+    color: var(--gray-900);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--gray-50); border-color: var(--gray-200); }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary {
+    background: var(--blue);
+    color: white;
+    border-color: var(--blue);
+  }
+  .btn.primary:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
+  .btn.primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+  .summary-strip {
+    background: white;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-size: 13px;
+  }
+  .summary-strip .label { color: var(--gray-400); }
+  .count-pass { color: var(--green); font-weight: 600; }
+  .count-fail { color: var(--red); font-weight: 600; }
+  .count-pending { color: var(--gray-400); }
+  .progress-bar {
+    flex: 1;
+    height: 5px;
+    background: var(--gray-100);
+    border-radius: 99px;
+    overflow: hidden;
+    max-width: 200px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--green-border);
+    border-radius: 99px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .field input {
+    font-family: inherit;
+    font-size: 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    color: var(--gray-900);
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .field input:focus { outline: none; border-color: var(--blue); background: white; }
+
+  .section {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .section-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .section-header:hover { background: var(--gray-50); }
+  .section-header .sec-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gray-900);
+    flex: 1;
+  }
+  .sec-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: var(--gray-100);
+    color: var(--gray-400);
+  }
+  .sec-badge.all-pass { background: var(--green-bg); color: var(--green); }
+  .sec-badge.has-fail { background: var(--red-bg); color: var(--red); }
+  .chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--gray-400);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .section-header.collapsed .chevron { transform: rotate(-90deg); }
+
+  .section-body { border-top: 1px solid var(--border); }
+
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    min-height: 44px;
+  }
+  .check-row:last-child { border-bottom: none; }
+  .check-row .item-label {
+    font-size: 13px;
+    color: var(--gray-900);
+    flex: 1;
+    line-height: 1.4;
+  }
+
+  .pf-group { display: flex; gap: 4px; flex-shrink: 0; }
+  .pf-btn {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    background: var(--gray-50);
+    color: var(--gray-400);
+    transition: all 0.12s;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+    min-width: 48px;
+    text-align: center;
+  }
+  .pf-btn:active { transform: scale(0.95); }
+  .pf-btn.pass.active { background: var(--green-bg); border-color: var(--green-border); color: var(--green); }
+  .pf-btn.fail.active { background: var(--red-bg); border-color: var(--red-border); color: var(--red); }
+  .pf-btn.yes.active { background: var(--green-bg); border-color: var(--green-border); color: var(--green); }
+  .pf-btn.no.active { background: var(--red-bg); border-color: var(--red-border); color: var(--red); }
+
+  .inline-input {
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--gray-50);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 5px 10px;
+    color: var(--gray-900);
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+  .inline-input:focus { outline: none; border-color: var(--blue); background: white; }
+
+  .table-wrap { padding: 12px 16px; overflow-x: auto; }
+  .table-note {
+    font-size: 11px;
+    color: var(--gray-400);
+    margin-bottom: 8px;
+  }
+
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 380px;
+  }
+  table.data-table th {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-400);
+    text-align: left;
+    padding: 6px 8px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  table.data-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    color: var(--gray-900);
+  }
+  table.data-table tr:last-child td { border-bottom: none; }
+  table.data-table input[type=text] {
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--gray-50);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 6px;
+    width: 60px;
+    text-align: center;
+    color: var(--gray-900);
+  }
+  table.data-table input[type=text]:focus { outline: none; border-color: var(--blue); }
+  table.data-table input[type=checkbox] {
+    width: 18px; height: 18px; cursor: pointer; accent-color: var(--red);
+  }
+  table.data-table select {
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--gray-50);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 4px;
+    width: 72px;
+    color: var(--gray-900);
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    text-align: center;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888780' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 5px center;
+    padding-right: 20px;
+  }
+  table.data-table select:focus { outline: none; border-color: var(--blue); }
+  table.data-table select.warn { background-color: #FFF8E6; border-color: #E6A817; color: #7A4F00; }
+  table.data-table select.danger { background-color: var(--red-bg); border-color: var(--red-border); color: var(--red); }
+
+  .wash-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--gray-900);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wash-row:last-child { border-bottom: none; }
+  .wash-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--blue); flex-shrink: 0; }
+
+  .notes-area {
+    width: 100%;
+    font-size: 13px;
+    font-family: inherit;
+    background: transparent;
+    border: none;
+    padding: 12px 16px;
+    color: var(--gray-900);
+    resize: vertical;
+    min-height: 90px;
+    line-height: 1.5;
+  }
+  .notes-area:focus { outline: none; background: var(--gray-50); }
+  .notes-area::placeholder { color: var(--gray-200); }
+
+  .hint { font-size: 11px; color: var(--gray-400); padding: 6px 16px 8px; background: var(--gray-50); border-bottom: 1px solid var(--border); }
+
+  .footer-note {
+    text-align: center;
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 12px;
+    padding: 0 16px;
+  }
+
+  @media (max-width: 500px) {
+    .info-grid { grid-template-columns: 1fr; }
+    .summary-strip .progress-bar { display: none; }
+    .page-header { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<div id="install-banner" style="display:none;background:#0C447C;color:white;padding:12px 16px;font-size:13px;font-family:-apple-system,sans-serif;align-items:center;gap:10px;position:sticky;top:0;z-index:200;">
+  <span style="flex:1">📲 Add to Home Screen: tap <strong>Share</strong> then <strong>"Add to Home Screen"</strong> for offline access.</span>
+  <button onclick="document.getElementById('install-banner').style.display='none';localStorage.setItem('banner-dismissed','1')" style="background:transparent;border:1px solid rgba(255,255,255,.5);color:white;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap;">Got it</button>
+</div>
+<script>
+if(!localStorage.getItem('banner-dismissed') && !navigator.standalone && /iPad|iPhone|iPod|Android/.test(navigator.userAgent)){
+  document.getElementById('install-banner').style.display='flex';
+}
+</script>
+
+<div class="page-header">
+  <div class="logo-area">
+    <h1>Merchants Fleet</h1>
+    <p>Vehicle Inspection Checklist</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn" onclick="resetForm()">Reset</button>
+    <button class="btn primary" id="pdfbtn" onclick="genPDF()">Download PDF ↓</button>
+  </div>
+</div>
+
+<div class="summary-strip">
+  <span class="count-pass" id="cp">✓ Pass: 0</span>
+  <span class="count-fail" id="cf">✗ Fail: 0</span>
+  <span class="count-pending" id="cn">Pending: 0</span>
+  <div class="progress-bar"><div class="progress-fill" id="prog"></div></div>
+</div>
+
+<div class="container">
+
+  <div class="info-grid">
+    <div class="field"><label>Date</label><input type="date" id="f-date"></div>
+    <div class="field"><label>Last 8 of VIN</label><input id="f-vin" type="text" placeholder="e.g. AB123456" maxlength="8"></div>
+    <div class="field"><label>Mileage</label><input id="f-mileage" type="number" placeholder="0"></div>
+    <div class="field"><label>Inspector</label><input id="f-inspector" type="text" placeholder="Name"></div>
+    <div class="field"><label>License plate</label><input id="f-plate" type="text" placeholder="Plate number"></div>
+    <div class="field"><label>State</label><input id="f-state" type="text" placeholder="OH" maxlength="2"></div>
+  </div>
+
+  <!-- Driver's Seat -->
+  <div class="section" id="s1">
+    <div class="section-header" onclick="toggleSec('s1')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Sitting in driver's seat</span>
+      <span class="sec-badge" id="b-s1">6 items</span>
+    </div>
+    <div class="section-body">
+      <div class="check-row"><span class="item-label">No dashboard warning lights illuminated</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="dash-lights">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="dash-lights">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Seatbelts functional and undamaged (present, not torn or frayed)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="seatbelts">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="seatbelts">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">All interior equipment works (horn, backup camera/alarm, defroster, windows, heater/AC, radio)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="interior-equip">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="interior-equip">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">At least one working key present</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="key">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="key">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Registration is current and documents are in glovebox</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="registration">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="registration">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">DOT inspection up-to-date if required (&gt;10,000 lbs GVW)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="dot">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="dot">Fail</button></div></div>
+    </div>
+  </div>
+
+  <!-- Glass -->
+  <div class="section" id="s2">
+    <div class="section-header" onclick="toggleSec('s2')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Glass</span>
+      <span class="sec-badge" id="b-s2">3 items</span>
+    </div>
+    <div class="section-body">
+      <div class="hint">Cracks → replace. Chips/starbursts in driver's line of sight → replace; otherwise repair.</div>
+      <div class="check-row"><span class="item-label">Windshield has no cracks impairing safety</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="windshield-crack">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="windshield-crack">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">No significant chips or starbursts in driver's line of sight</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="windshield-chips">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="windshield-chips">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Windows (side &amp; rear) intact with no damage affecting visibility</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="side-windows">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="side-windows">Fail</button></div></div>
+    </div>
+  </div>
+
+  <!-- Lights -->
+  <div class="section" id="s3">
+    <div class="section-header" onclick="toggleSec('s3')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Lights</span>
+      <span class="sec-badge" id="b-s3">3 items</span>
+    </div>
+    <div class="section-body">
+      <div class="check-row"><span class="item-label">All exterior lights operational — headlights (high/low beams), taillights, brake lights, turn signals, hazard flashers, reverse lights, markers</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="ext-lights">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="ext-lights">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Auxiliary lights functional (if equipped)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="aux-lights">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="aux-lights">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">No broken/missing light lenses or housings</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="lenses">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="lenses">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Bulb number(s) required (if any)</span><input class="inline-input" id="f-bulbs" type="text" placeholder="e.g. H7, 3157"></div>
+    </div>
+  </div>
+
+  <!-- Under Hood -->
+  <div class="section" id="s4">
+    <div class="section-header" onclick="toggleSec('s4')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Under hood</span>
+      <span class="sec-badge" id="b-s4">3 items</span>
+    </div>
+    <div class="section-body">
+      <div class="check-row"><span class="item-label">Battery cables &amp; terminals clean and tight</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="batt-cables">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="batt-cables">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Battery case intact (no swelling or cracks)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="batt-case">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="batt-case">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Battery health (conduct battery load test)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="batt-health">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="batt-health">Fail</button></div></div>
+    </div>
+  </div>
+
+  <!-- Exterior -->
+  <div class="section" id="s5">
+    <div class="section-header" onclick="toggleSec('s5')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Exterior walk around</span>
+      <span class="sec-badge" id="b-s5">3 items</span>
+    </div>
+    <div class="section-body">
+      <div class="check-row"><span class="item-label">Wiper blades are not torn</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="wipers">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="wipers">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Front and rear plates installed with current registration stickers</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="plates">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="plates">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Free of non-OEM and client-added decals, markings, or placards</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="decals">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="decals">Fail</button></div></div>
+    </div>
+  </div>
+
+  <!-- Tires -->
+  <div class="section" id="s6">
+    <div class="section-header" onclick="toggleSec('s6')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Tires &amp; wheels (on lift)</span>
+      <span class="sec-badge" id="b-s6">6 items</span>
+    </div>
+    <div class="section-body">
+      <div class="check-row"><span class="item-label">Tire size</span><input class="inline-input" id="f-tiresize" type="text" placeholder="e.g. 235/65R17"></div>
+      <div class="table-wrap">
+        <p class="table-note">Tread depth (in 32nds) — minimum 5/32. Check replace if below minimum.</p>
+        <table class="data-table">
+          <thead><tr><th>Position</th><th>Outer</th><th>Middle</th><th>Inner</th><th>Replace?</th></tr></thead>
+          <tbody>
+            <tr><td>Front left</td><td id="td-t-fl-o"></td><td id="td-t-fl-m"></td><td id="td-t-fl-i"></td><td style="text-align:center"><input type="checkbox" id="t-fl-r"></td></tr>
+            <tr><td>Front right</td><td id="td-t-fr-o"></td><td id="td-t-fr-m"></td><td id="td-t-fr-i"></td><td style="text-align:center"><input type="checkbox" id="t-fr-r"></td></tr>
+            <tr><td>Rear left</td><td id="td-t-rl-o"></td><td id="td-t-rl-m"></td><td id="td-t-rl-i"></td><td style="text-align:center"><input type="checkbox" id="t-rl-r"></td></tr>
+            <tr><td>Rear right</td><td id="td-t-rr-o"></td><td id="td-t-rr-m"></td><td id="td-t-rr-i"></td><td style="text-align:center"><input type="checkbox" id="t-rr-r"></td></tr>
+            <tr><td>Spare</td><td id="td-t-sp-o"></td><td id="td-t-sp-m"></td><td id="td-t-sp-i"></td><td style="text-align:center"><input type="checkbox" id="t-sp-r"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="check-row"><span class="item-label">Tires free of damage (no cuts, bulges, nails, exposed cords; no signs of leaks)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="tire-damage">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="tire-damage">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Tires properly inflated to recommended pressure (per door jamb)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="tire-pressure">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="tire-pressure">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">All wheel lug nuts present and secure (none missing or loose)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="lug-nuts">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="lug-nuts">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Wheels/rims in good condition (no cracks or severe damage; all rims OEM match)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="rims">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="rims">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Spare tire present and usable (proper tread depth, inflated, correctly stored)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="spare">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="spare">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Spare tire anchor present</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="spare-anchor">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="spare-anchor">Fail</button></div></div>
+    </div>
+  </div>
+
+  <!-- Brakes -->
+  <div class="section" id="s7">
+    <div class="section-header" onclick="toggleSec('s7')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Brakes (on lift)</span>
+      <span class="sec-badge" id="b-s7"></span>
+    </div>
+    <div class="section-body">
+      <div class="table-wrap">
+        <p class="table-note">Brake measurements (in mm) — minimum 4mm pad thickness.</p>
+        <table class="data-table">
+          <thead><tr><th>Position</th><th>Pads (mm)</th><th>Rotors (mm)</th><th>Repl pads?</th><th>Repl rotors?</th></tr></thead>
+          <tbody>
+            <tr><td>Front left</td><td id="td-b-fl-p"></td><td><input type="text" id="b-fl-ro" placeholder="—"></td><td style="text-align:center"><input type="checkbox" id="b-fl-rp"></td><td style="text-align:center"><input type="checkbox" id="b-fl-rr"></td></tr>
+            <tr><td>Front right</td><td id="td-b-fr-p"></td><td><input type="text" id="b-fr-ro" placeholder="—"></td><td style="text-align:center"><input type="checkbox" id="b-fr-rp"></td><td style="text-align:center"><input type="checkbox" id="b-fr-rr"></td></tr>
+            <tr><td>Rear left</td><td id="td-b-rl-p"></td><td><input type="text" id="b-rl-ro" placeholder="—"></td><td style="text-align:center"><input type="checkbox" id="b-rl-rp"></td><td style="text-align:center"><input type="checkbox" id="b-rl-rr"></td></tr>
+            <tr><td>Rear right</td><td id="td-b-rr-p"></td><td><input type="text" id="b-rr-ro" placeholder="—"></td><td style="text-align:center"><input type="checkbox" id="b-rr-rp"></td><td style="text-align:center"><input type="checkbox" id="b-rr-rr"></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Steering -->
+  <div class="section" id="s8">
+    <div class="section-header" onclick="toggleSec('s8')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Steering &amp; suspension</span>
+      <span class="sec-badge" id="b-s8">7 items</span>
+    </div>
+    <div class="section-body">
+      <div class="check-row"><span class="item-label">No excessive play in inner/outer tie rods</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="tie-rods">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="tie-rods">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">No excessive play in upper/lower ball joints</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="ball-joints">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="ball-joints">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Control arms and bushings in good condition</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="control-arms">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="control-arms">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Sway bar links/bushings secure and not worn</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="sway-bar">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="sway-bar">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Steering gear/rack free of leaks</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="steering-rack">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="steering-rack">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Shocks/struts not leaking and mounted securely</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="shocks">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="shocks">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Front wheel bearings free of play (no noise or looseness)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="bearings">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="bearings">Fail</button></div></div>
+    </div>
+  </div>
+
+  <!-- Drive Test -->
+  <div class="section" id="s9">
+    <div class="section-header" onclick="toggleSec('s9')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Drive test</span>
+      <span class="sec-badge" id="b-s9">3 items</span>
+    </div>
+    <div class="section-body">
+      <div class="check-row"><span class="item-label">Steering operates normally (no excessive play or vibration)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="drive-steering">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="drive-steering">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Service brakes function properly (no vibrations, grinding, or squealing during braking)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="service-brakes">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="service-brakes">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Parking brake holds vehicle and releases properly (dash indicator light operates)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="park-brake">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="park-brake">Fail</button></div></div>
+    </div>
+  </div>
+
+  <!-- Admin -->
+  <div class="section" id="s10">
+    <div class="section-header" onclick="toggleSec('s10')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">To be completed by admin</span>
+      <span class="sec-badge" id="b-s10">3 items</span>
+    </div>
+    <div class="section-body">
+      <div class="check-row"><span class="item-label">Free from open recalls (search using VIN — nhtsa.gov/recalls)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="recalls">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="recalls">Fail</button></div></div>
+      <div class="check-row"><span class="item-label">Oil change required? (5k miles or 180 days)</span><div class="pf-group"><button class="pf-btn yes" onclick="setPF(this,'yes')" data-key="oil-change">Yes</button><button class="pf-btn no" onclick="setPF(this,'no')" data-key="oil-change">No</button></div></div>
+      <div class="check-row"><span class="item-label">Oil capacity &amp; viscosity</span><input class="inline-input" id="f-oil" type="text" placeholder="e.g. 5W-30, 5.5qt"></div>
+      <div class="check-row"><span class="item-label">Air filter required? (30k miles)</span><div class="pf-group"><button class="pf-btn yes" onclick="setPF(this,'yes')" data-key="air-filter">Yes</button><button class="pf-btn no" onclick="setPF(this,'no')" data-key="air-filter">No</button></div></div>
+    </div>
+  </div>
+
+  <!-- Cleaning -->
+  <div class="section" id="s11">
+    <div class="section-header" onclick="toggleSec('s11')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Cleaning</span>
+      <span class="sec-badge" id="b-s11"></span>
+    </div>
+    <div class="section-body">
+      <label class="wash-row"><input type="checkbox" id="w-cargo"> Cargo van — $150</label>
+      <label class="wash-row"><input type="checkbox" id="w-pass"> Passenger van/vehicle — $180</label>
+      <label class="wash-row"><input type="checkbox" id="w-tire"> Check &amp; adjust tire pressure in Auto Integrate — free</label>
+    </div>
+  </div>
+
+  <!-- Notes -->
+  <div class="section" id="s12">
+    <div class="section-header" onclick="toggleSec('s12')">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="sec-title">Additional notes &amp; comments</span>
+      <span class="sec-badge" id="b-s12"></span>
+    </div>
+    <div class="section-body">
+      <textarea class="notes-area" id="f-notes" placeholder="Enter failure details, causes, or any additional notes here..."></textarea>
+    </div>
+  </div>
+
+  <p class="footer-note">After completing all sections, tap "Download PDF" — then upload the file to Body Shop Connect.</p>
+
+</div>
+
+<script>
+document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+
+function setPF(btn, val) {
+  const grp = btn.closest('.pf-group');
+  grp.querySelectorAll('.pf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateCounts();
+  updateSectionBadges();
+}
+
+function updateCounts() {
+  const p = document.querySelectorAll('.pf-btn.pass.active, .pf-btn.yes.active').length;
+  const f = document.querySelectorAll('.pf-btn.fail.active, .pf-btn.no.active').length;
+  const t = document.querySelectorAll('.pf-group').length;
+  document.getElementById('cp').textContent = '✓ Pass: ' + p;
+  document.getElementById('cf').textContent = '✗ Fail: ' + f;
+  document.getElementById('cn').textContent = 'Pending: ' + (t - p - f);
+  const pct = t > 0 ? Math.round(((p + f) / t) * 100) : 0;
+  document.getElementById('prog').style.width = pct + '%';
+  document.getElementById('prog').style.background = f > 0 ? '#E24B4A' : '#639922';
+}
+
+function updateSectionBadges() {
+  for (let i = 1; i <= 12; i++) {
+    const sec = document.getElementById('s' + i);
+    if (!sec) continue;
+    const badge = document.getElementById('b-s' + i);
+    if (!badge) continue;
+    const groups = sec.querySelectorAll('.pf-group');
+    if (groups.length === 0) continue;
+    const passes = sec.querySelectorAll('.pf-btn.pass.active, .pf-btn.yes.active').length;
+    const fails = sec.querySelectorAll('.pf-btn.fail.active, .pf-btn.no.active').length;
+    if (fails > 0) {
+      badge.textContent = fails + ' fail' + (fails > 1 ? 's' : '');
+      badge.className = 'sec-badge has-fail';
+    } else if (passes === groups.length) {
+      badge.textContent = 'All pass';
+      badge.className = 'sec-badge all-pass';
+    } else {
+      badge.textContent = passes + '/' + groups.length;
+      badge.className = 'sec-badge';
+    }
+  }
+}
+
+function toggleSec(id) {
+  const sec = document.getElementById(id);
+  const h = sec.querySelector('.section-header');
+  const b = sec.querySelector('.section-body');
+  const isHidden = b.style.display === 'none';
+  b.style.display = isHidden ? '' : 'none';
+  h.classList.toggle('collapsed', !isHidden);
+}
+
+function resetForm() {
+  if (!confirm('Reset all fields? This cannot be undone.')) return;
+  document.querySelectorAll('.pf-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('input[type=text], input[type=number]').forEach(i => { if (i.id !== 'f-date') i.value = ''; });
+  document.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+  document.getElementById('f-notes').value = '';
+  document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+  updateCounts();
+  updateSectionBadges();
+}
+
+function gv(id) { const e = document.getElementById(id); return e ? (e.value || '—') : '—'; }
+function gcb(id) { const e = document.getElementById(id); return e && e.checked ? 'YES' : 'no'; }
+function getPF(key) {
+  const active = document.querySelector(`.pf-btn.active[data-key="${key}"]`);
+  return active ? active.textContent.trim() : '—';
+}
+
+function genPDF() {
+  const btn = document.getElementById('pdfbtn');
+  btn.textContent = 'Generating...';
+  btn.disabled = true;
+  setTimeout(() => {
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+      const W = 612, ml = 40, mr = 40, cw = W - ml - mr;
+      let y = 44;
+
+      function chk(n = 30) { if (y + n > 755) { doc.addPage(); y = 40; } }
+      function rule(color = [220,218,212]) { doc.setDrawColor(...color); doc.setLineWidth(0.5); doc.line(ml, y, W - mr, y); y += 6; }
+
+      function secHead(txt) {
+        chk(22);
+        doc.setFillColor(240, 242, 245);
+        doc.rect(ml, y - 2, cw, 17, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(24, 95, 165);
+        doc.text(txt.toUpperCase(), ml + 5, y + 11);
+        y += 21;
+      }
+
+      function pfRow(label, key) {
+        chk(15);
+        const val = getPF(key);
+        const color = val === 'Pass' || val === 'Yes' ? [45, 110, 25] : val === 'Fail' || val === 'No' ? [163, 45, 45] : [136, 135, 128];
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50);
+        const lines = doc.splitTextToSize(label, cw - 65);
+        doc.text(lines, ml + 4, y + 10);
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(...color);
+        doc.text(val, W - mr, y + 10, { align: 'right' });
+        y += Math.max(lines.length * 12, 15);
+      }
+
+      function fldRow(label, val) {
+        chk(13);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+        doc.setTextColor(136, 135, 128); doc.text(label + ':', ml + 4, y + 10);
+        doc.setTextColor(30, 30, 30); doc.text(String(val), ml + 110, y + 10);
+        y += 14;
+      }
+
+      // Title block
+      doc.setFillColor(24, 95, 165); doc.rect(0, 0, W, 36, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(255, 255, 255);
+      doc.text('Merchants Fleet', ml, 23);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      doc.text('Vehicle Inspection Checklist', ml, 34);
+      y = 50;
+
+      // Vehicle info grid
+      const info = [['Date', gv('f-date')], ['VIN (last 8)', gv('f-vin')], ['Mileage', gv('f-mileage')], ['Inspector', gv('f-inspector')], ['License plate', gv('f-plate')], ['State', gv('f-state')]];
+      for (let i = 0; i < info.length; i += 2) {
+        chk(13);
+        [[info[i], ml], [info[i + 1] || null, ml + cw / 2 + 10]].forEach(([item, x]) => {
+          if (!item) return;
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(136, 135, 128);
+          doc.text(item[0].toUpperCase(), x, y + 9);
+          doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.setFontSize(8.5);
+          doc.text(item[1], x + 75, y + 9);
+        });
+        y += 14;
+      }
+      y += 4; rule([180, 178, 170]); y += 2;
+
+      const checkSections = [
+        { title: "Driver's seat", items: [["No dashboard warning lights illuminated", "dash-lights"], ["Seatbelts functional and undamaged", "seatbelts"], ["All interior equipment works", "interior-equip"], ["At least one working key present", "key"], ["Registration current, documents in glovebox", "registration"], ["DOT inspection up-to-date (if required)", "dot"]] },
+        { title: "Glass", items: [["Windshield no cracks impairing safety", "windshield-crack"], ["No chips/starbursts in driver's line of sight", "windshield-chips"], ["Side & rear windows intact", "side-windows"]] },
+        { title: "Lights", items: [["All exterior lights operational", "ext-lights"], ["Auxiliary lights functional (if equipped)", "aux-lights"], ["No broken/missing light lenses or housings", "lenses"]] },
+        { title: "Under hood", items: [["Battery cables & terminals clean and tight", "batt-cables"], ["Battery case intact (no swelling or cracks)", "batt-case"], ["Battery health (load test)", "batt-health"]] },
+        { title: "Exterior walk around", items: [["Wiper blades not torn", "wipers"], ["Front and rear plates installed, current stickers", "plates"], ["Free of non-OEM decals, markings, or placards", "decals"]] },
+        { title: "Tires & wheels", items: [["Tires free of damage", "tire-damage"], ["Tires properly inflated (per door jamb)", "tire-pressure"], ["All wheel lug nuts present and secure", "lug-nuts"], ["Wheels/rims in good condition, OEM match", "rims"], ["Spare tire present and usable", "spare"], ["Spare tire anchor present", "spare-anchor"]] },
+        { title: "Steering & suspension", items: [["No excessive play in tie rods", "tie-rods"], ["No excessive play in ball joints", "ball-joints"], ["Control arms and bushings in good condition", "control-arms"], ["Sway bar links/bushings secure and not worn", "sway-bar"], ["Steering gear/rack free of leaks", "steering-rack"], ["Shocks/struts not leaking, mounted securely", "shocks"], ["Front wheel bearings free of play", "bearings"]] },
+        { title: "Drive test", items: [["Steering operates normally", "drive-steering"], ["Service brakes function properly", "service-brakes"], ["Parking brake holds and releases properly", "park-brake"]] },
+        { title: "Admin", items: [["Free from open recalls (nhtsa.gov/recalls)", "recalls"], ["Oil change required? (5k mi or 180 days)", "oil-change"], ["Air filter required? (30k miles)", "air-filter"]] }
+      ];
+
+      checkSections.forEach(s => {
+        secHead(s.title);
+        s.items.forEach(([label, key]) => pfRow(label, key));
+        y += 4;
+      });
+
+      // Tires table
+      chk(90);
+      secHead('Tire tread depth (32nds — min 5/32)');
+      const tc = [ml + 4, ml + 95, ml + 155, ml + 215, ml + 275];
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(136, 135, 128);
+      ['Position', 'Outer', 'Middle', 'Inner', 'Replace?'].forEach((h, i) => doc.text(h, tc[i], y + 9));
+      y += 14; rule();
+      [['Front left', 't-fl-o', 't-fl-m', 't-fl-i', 't-fl-r'], ['Front right', 't-fr-o', 't-fr-m', 't-fr-i', 't-fr-r'], ['Rear left', 't-rl-o', 't-rl-m', 't-rl-i', 't-rl-r'], ['Rear right', 't-rr-o', 't-rr-m', 't-rr-i', 't-rr-r'], ['Spare', 't-sp-o', 't-sp-m', 't-sp-i', 't-sp-r']].forEach(([pos, ...ids]) => {
+        chk(14);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50);
+        doc.text(pos, tc[0], y + 9);
+        [gv(ids[0]), gv(ids[1]), gv(ids[2])].forEach((v, i) => doc.text(v, tc[i + 1], y + 9));
+        const rep = gcb(ids[3]);
+        doc.setTextColor(rep === 'YES' ? 163 : 80, rep === 'YES' ? 45 : 80, 45);
+        doc.text(rep, tc[4], y + 9);
+        y += 13;
+      });
+      y += 4;
+
+      // Brakes table
+      chk(90);
+      secHead('Brake measurements (mm — min 4mm pads)');
+      const bc = [ml + 4, ml + 95, ml + 165, ml + 240, ml + 315];
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(136, 135, 128);
+      ['Position', 'Pads (mm)', 'Rotors (mm)', 'Repl pads?', 'Repl rotors?'].forEach((h, i) => doc.text(h, bc[i], y + 9));
+      y += 14; rule();
+      [['Front left', 'b-fl-p', 'b-fl-ro', 'b-fl-rp', 'b-fl-rr'], ['Front right', 'b-fr-p', 'b-fr-ro', 'b-fr-rp', 'b-fr-rr'], ['Rear left', 'b-rl-p', 'b-rl-ro', 'b-rl-rp', 'b-rl-rr'], ['Rear right', 'b-rr-p', 'b-rr-ro', 'b-rr-rp', 'b-rr-rr']].forEach(([pos, ...ids]) => {
+        chk(14);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50);
+        doc.text(pos, bc[0], y + 9);
+        [gv(ids[0]), gv(ids[1])].forEach((v, i) => doc.text(v, bc[i + 1], y + 9));
+        [gcb(ids[2]), gcb(ids[3])].forEach((v, i) => {
+          doc.setTextColor(v === 'YES' ? 163 : 80, v === 'YES' ? 45 : 80, 45);
+          doc.text(v, bc[i + 3], y + 9);
+        });
+        y += 13;
+      });
+      y += 4;
+
+      // Notes & extras
+      chk(60);
+      secHead('Additional info');
+      fldRow('Tire size', gv('f-tiresize'));
+      fldRow('Bulbs required', gv('f-bulbs'));
+      fldRow('Oil capacity/viscosity', gv('f-oil'));
+      const cleaning = [];
+      if (document.getElementById('w-cargo').checked) cleaning.push('Cargo van ($150)');
+      if (document.getElementById('w-pass').checked) cleaning.push('Passenger van ($180)');
+      if (document.getElementById('w-tire').checked) cleaning.push('Tire pressure check (free)');
+      fldRow('Cleaning', cleaning.length ? cleaning.join(', ') : 'None selected');
+      y += 4;
+
+      const notes = document.getElementById('f-notes').value.trim();
+      if (notes) {
+        chk(20);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(136, 135, 128);
+        doc.text('ADDITIONAL COMMENTS:', ml + 4, y + 9); y += 14;
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+        const nl = doc.splitTextToSize(notes, cw - 8);
+        nl.forEach(line => { chk(12); doc.text(line, ml + 4, y + 9); y += 12; });
+        y += 4;
+      }
+
+      // Summary footer
+      y += 6; rule([180, 178, 170]);
+      const p = document.querySelectorAll('.pf-btn.pass.active, .pf-btn.yes.active').length;
+      const f = document.querySelectorAll('.pf-btn.fail.active, .pf-btn.no.active').length;
+      const t = document.querySelectorAll('.pf-group').length;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+      doc.setTextColor(45, 110, 25); doc.text('PASS: ' + p, ml, y + 10);
+      doc.setTextColor(163, 45, 45); doc.text('FAIL: ' + f, ml + 75, y + 10);
+      doc.setTextColor(136, 135, 128); doc.text('PENDING: ' + (t - p - f), ml + 150, y + 10);
+
+      // Page numbers
+      const pages = doc.getNumberOfPages();
+      for (let i = 1; i <= pages; i++) {
+        doc.setPage(i);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(180, 178, 170);
+        doc.text('Merchants Fleet Vehicle Inspection', ml, 750);
+        doc.text('Page ' + i + ' of ' + pages, W - mr, 750, { align: 'right' });
+      }
+
+      const vin = gv('f-vin').replace(/[^a-zA-Z0-9]/g, '');
+      const dt = gv('f-date').replace(/-/g, '');
+      doc.save('MerchantsFleet_Inspection_' + (vin !== '—' ? vin : 'VIN') + '_' + dt + '.pdf');
+    } catch (e) {
+      alert('PDF generation failed: ' + e.message);
+    }
+    btn.textContent = 'Download PDF ↓';
+    btn.disabled = false;
+  }, 100);
+}
+
+updateCounts();
+updateSectionBadges();
+
+// Build tire tread dropdowns (0-14/32nds) with color coding
+function makeTireSelect(id) {
+  const sel = document.createElement('select');
+  sel.id = id;
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '—'; sel.appendChild(blank);
+  for (let i = 0; i <= 14; i++) {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = i + '/32"';
+    sel.appendChild(opt);
+  }
+  sel.addEventListener('change', function() {
+    const v = parseInt(this.value);
+    this.className = '';
+    if (!isNaN(v)) {
+      if (v <= 2) this.classList.add('danger');
+      else if (v < 5) this.classList.add('warn');
+    }
+  });
+  return sel;
+}
+
+// Build brake pad dropdowns (0-12mm) with color coding
+function makeBrakeSelect(id) {
+  const sel = document.createElement('select');
+  sel.id = id;
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '—'; sel.appendChild(blank);
+  for (let i = 0; i <= 12; i++) {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = i + ' mm';
+    sel.appendChild(opt);
+  }
+  sel.addEventListener('change', function() {
+    const v = parseInt(this.value);
+    this.className = '';
+    if (!isNaN(v)) {
+      if (v <= 3) this.classList.add('danger');
+      else if (v <= 4) this.classList.add('warn');
+    }
+  });
+  return sel;
+}
+
+// Inject tire selects into table cells
+[['t-fl-o','t-fl-m','t-fl-i'],['t-fr-o','t-fr-m','t-fr-i'],
+ ['t-rl-o','t-rl-m','t-rl-i'],['t-rr-o','t-rr-m','t-rr-i'],
+ ['t-sp-o','t-sp-m','t-sp-i']].forEach(function(ids) {
+  ids.forEach(function(id) {
+    var td = document.getElementById('td-' + id);
+    if (td) td.appendChild(makeTireSelect(id));
+  });
+});
+
+// Inject brake pad selects into table cells
+['b-fl-p','b-fr-p','b-rl-p','b-rr-p'].forEach(function(id) {
+  var td = document.getElementById('td-' + id);
+  if (td) td.appendChild(makeBrakeSelect(id));
+});
+</script>
+</body>
+</html>
