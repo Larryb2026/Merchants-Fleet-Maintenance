@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="MF Inspect">
+<meta name="apple-mobile-web-app-title" content="Fleet Inspect">
 <meta name="theme-color" content="#185FA5">
 <meta name="mobile-web-app-capable" content="yes">
 <script>
@@ -417,6 +417,25 @@ self.addEventListener('fetch', e => {
   .fail-note-label { font-size: 11px; font-weight: 600; color: var(--red); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
   .pf-btn.na.active { background: #F1EFE8; border-color: #888780; color: #5F5E5A; }
 
+
+  .rotor-popup-row {
+    display: none;
+    padding: 6px 10px 8px;
+    background: #FFF8E6;
+    border-top: 1px solid #E6A817;
+    animation: slideDown 0.18s ease;
+  }
+  .rotor-popup-row.visible { display: flex; align-items: center; gap: 8px; }
+  .rotor-popup-row label { font-size: 11px; font-weight: 600; color: #7A4F00; white-space: nowrap; }
+  .rotor-popup-row select { font-size: 12px; font-family: inherit; background: white;
+    border: 1px solid #E6A817; border-radius: 4px; padding: 4px 20px 4px 6px; color: #1C1C1B;
+    cursor: pointer; -webkit-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888780' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 5px center; }
+  .rotor-popup-row select.danger { background-color: var(--red-bg); border-color: var(--red-border); color: var(--red); }
+  .rotor-replace-flag { font-size: 11px; font-weight: 700; color: var(--red); display: none; }
+  .rotor-replace-flag.visible { display: inline; }
+
   .hint { font-size: 11px; color: var(--gray-400); padding: 6px 16px 8px; background: var(--gray-50); border-bottom: 1px solid var(--border); }
 
   .footer-note {
@@ -426,6 +445,37 @@ self.addEventListener('fetch', e => {
     margin-top: 12px;
     padding: 0 16px;
   }
+
+
+  /* Form toggle */
+  .form-toggle {
+    display: flex;
+    background: var(--gray-100);
+    border-radius: 10px;
+    padding: 3px;
+    gap: 2px;
+    margin: 0 auto 0 0;
+  }
+  .toggle-btn {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    background: transparent;
+    color: var(--gray-400);
+    transition: all 0.18s;
+    white-space: nowrap;
+  }
+  .toggle-btn.active {
+    background: white;
+    color: var(--gray-900);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  }
+  .toggle-btn.ent.active { color: #1A6B3C; }
 
   @media (max-width: 500px) {
     .info-grid { grid-template-columns: 1fr; }
@@ -447,14 +497,17 @@ if(!localStorage.getItem('banner-dismissed') && !navigator.standalone && /iPad|i
 </script>
 
 <div class="page-header">
-  <div class="logo-area">
-    <h1>Merchants Fleet</h1>
-    <p>Vehicle Inspection Checklist</p>
+  <div class="form-toggle">
+    <button class="toggle-btn active" id="tog-mf" onclick="switchForm('merchants')">Merchants Fleet</button>
+    <button class="toggle-btn ent" id="tog-ent" onclick="switchForm('enterprise')">Enterprise</button>
   </div>
   <div class="header-actions">
     <button class="btn" onclick="resetForm()">Reset</button>
     <button class="btn primary" id="pdfbtn" onclick="genPDF()">Download PDF ↓</button>
   </div>
+</div>
+<div class="logo-area" id="form-subtitle" style="padding:8px 16px 0;background:white;border-bottom:1px solid var(--border);">
+  <p id="form-subtitle-text" style="font-size:12px;color:var(--gray-400);">Merchants Fleet — Vehicle Inspection Checklist</p>
 </div>
 
 <div class="summary-strip">
@@ -466,6 +519,7 @@ if(!localStorage.getItem('banner-dismissed') && !navigator.standalone && /iPad|i
 
 <div class="container">
 
+  <div id="merchants-form">
   <div class="info-grid">
     <div class="field"><label>Date</label><input type="date" id="f-date"></div>
     <div class="field"><label>Last 8 of VIN</label><input id="f-vin" type="text" placeholder="e.g. AB123456" maxlength="8"></div>
@@ -618,10 +672,10 @@ if(!localStorage.getItem('banner-dismissed') && !navigator.standalone && /iPad|i
         <table class="data-table">
           <thead><tr><th>Position</th><th>Pads (mm)</th><th>Rotors (mm)</th><th>Repl pads?</th><th>Repl rotors?</th></tr></thead>
           <tbody>
-            <tr><td>Front left</td><td id="td-b-fl-p"></td><td><input type="text" id="b-fl-ro" placeholder="—"></td><td style="text-align:center"><input type="checkbox" id="b-fl-rp"></td><td style="text-align:center"><input type="checkbox" id="b-fl-rr"></td></tr>
-            <tr><td>Front right</td><td id="td-b-fr-p"></td><td><input type="text" id="b-fr-ro" placeholder="—"></td><td style="text-align:center"><input type="checkbox" id="b-fr-rp"></td><td style="text-align:center"><input type="checkbox" id="b-fr-rr"></td></tr>
-            <tr><td>Rear left</td><td id="td-b-rl-p"></td><td><input type="text" id="b-rl-ro" placeholder="—"></td><td style="text-align:center"><input type="checkbox" id="b-rl-rp"></td><td style="text-align:center"><input type="checkbox" id="b-rl-rr"></td></tr>
-            <tr><td>Rear right</td><td id="td-b-rr-p"></td><td><input type="text" id="b-rr-ro" placeholder="—"></td><td style="text-align:center"><input type="checkbox" id="b-rr-rp"></td><td style="text-align:center"><input type="checkbox" id="b-rr-rr"></td></tr>
+            <tr data-pos="fl" data-prefix="b"><td>Front left</td><td id="td-b-fl-p"></td><td style="padding:0">  <div class="rotor-popup-row" id="rp-b-fl">    <label>Rotor (mm):</label>    <select id="b-fl-ro" onchange="checkRotor(this,'b-fl-rr')"><option value="">—</option></select>    <span class="rotor-replace-flag" id="rflag-b-fl">⚠ REPLACE</span>  </div></td><td style="text-align:center"><input type="checkbox" id="b-fl-rp"></td><td style="text-align:center"><input type="checkbox" id="b-fl-rr"></td></tr>
+            <tr data-pos="fr" data-prefix="b"><td>Front right</td><td id="td-b-fr-p"></td><td style="padding:0">  <div class="rotor-popup-row" id="rp-b-fr">    <label>Rotor (mm):</label>    <select id="b-fr-ro" onchange="checkRotor(this,'b-fr-rr')"><option value="">—</option></select>    <span class="rotor-replace-flag" id="rflag-b-fr">⚠ REPLACE</span>  </div></td><td style="text-align:center"><input type="checkbox" id="b-fr-rp"></td><td style="text-align:center"><input type="checkbox" id="b-fr-rr"></td></tr>
+            <tr data-pos="rl" data-prefix="b"><td>Rear left</td><td id="td-b-rl-p"></td><td style="padding:0">  <div class="rotor-popup-row" id="rp-b-rl">    <label>Rotor (mm):</label>    <select id="b-rl-ro" onchange="checkRotor(this,'b-rl-rr')"><option value="">—</option></select>    <span class="rotor-replace-flag" id="rflag-b-rl">⚠ REPLACE</span>  </div></td><td style="text-align:center"><input type="checkbox" id="b-rl-rp"></td><td style="text-align:center"><input type="checkbox" id="b-rl-rr"></td></tr>
+            <tr data-pos="rr" data-prefix="b"><td>Rear right</td><td id="td-b-rr-p"></td><td style="padding:0">  <div class="rotor-popup-row" id="rp-b-rr">    <label>Rotor (mm):</label>    <select id="b-rr-ro" onchange="checkRotor(this,'b-rr-rr')"><option value="">—</option></select>    <span class="rotor-replace-flag" id="rflag-b-rr">⚠ REPLACE</span>  </div></td><td style="text-align:center"><input type="checkbox" id="b-rr-rp"></td><td style="text-align:center"><input type="checkbox" id="b-rr-rr"></td></tr>
           </tbody>
         </table>
       </div>
@@ -680,10 +734,10 @@ if(!localStorage.getItem('banner-dismissed') && !navigator.standalone && /iPad|i
     <div class="section-body">
       <div class="check-row" data-failnote="fn-recalls"><span class="item-label">Free from open recalls (search using VIN — nhtsa.gov/recalls)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="recalls">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="recalls">Fail</button></div></div>
       <div class="fail-note-row" id="fn-recalls"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-recalls"></textarea></div>
-      <div class="check-row" data-failnote="fn-oil-change"><span class="item-label">Oil change required? (5k miles or 180 days)</span><div class="pf-group"><button class="pf-btn yes" onclick="setPF(this,'yes')" data-key="oil-change">Yes</button><button class="pf-btn no" onclick="setPF(this,'no')" data-key="oil-change">No</button></div></div>
+      <div class="check-row" data-failnote="fn-oil-change"><span class="item-label">Oil change required? (5k miles or 180 days)</span><div class="pf-group"><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="oil-change">Yes — Change needed</button><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="oil-change">No — Pass</button></div></div>
       <div class="fail-note-row" id="fn-oil-change"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-oil-change"></textarea></div>
       <div class="check-row"><span class="item-label">Oil capacity &amp; viscosity</span><input class="inline-input" id="f-oil" type="text" placeholder="e.g. 5W-30, 5.5qt"></div>
-      <div class="check-row" data-failnote="fn-air-filter"><span class="item-label">Air filter required? (30k miles)</span><div class="pf-group"><button class="pf-btn yes" onclick="setPF(this,'yes')" data-key="air-filter">Yes</button><button class="pf-btn no" onclick="setPF(this,'no')" data-key="air-filter">No</button></div></div>
+      <div class="check-row" data-failnote="fn-air-filter"><span class="item-label">Air filter required? (30k miles)</span><div class="pf-group"><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="air-filter">Yes — Replace</button><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="air-filter">No — Pass</button></div></div>
       <div class="fail-note-row" id="fn-air-filter"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-air-filter"></textarea></div>
     </div>
   </div>
@@ -716,6 +770,221 @@ if(!localStorage.getItem('banner-dismissed') && !navigator.standalone && /iPad|i
 
   <p class="footer-note">After completing all sections, tap "Download PDF" — then upload the file to Body Shop Connect.</p>
 
+  </div><!-- end merchants-form -->
+
+  <!-- ENTERPRISE FORM -->
+  <div id="enterprise-form" style="display:none;">
+    <div class="info-grid">
+      <div class="field"><label>Date</label><input type="date" id="ef-date"></div>
+      <div class="field"><label>Last 8 of VIN</label><input id="ef-vin" type="text" placeholder="e.g. AB123456" maxlength="8"></div>
+      <div class="field"><label>Mileage</label><input id="ef-mileage" type="number" placeholder="0"></div>
+      <div class="field"><label>Inspector</label><input id="ef-inspector" type="text" placeholder="Name"></div>
+      <div class="field"><label>License plate</label><input id="ef-plate" type="text" placeholder="Plate number"></div>
+      <div class="field"><label>State</label><input id="ef-state" type="text" placeholder="OH" maxlength="2"></div>
+    </div>
+
+    <!-- Driver's Seat -->
+    <div class="section" id="es1">
+      <div class="section-header" onclick="toggleSec('es1')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">Sitting in driver's seat</span>
+        <span class="sec-badge" id="b-es1">2 items</span>
+      </div>
+      <div class="section-body">
+        <div class="check-row" data-failnote="efn-dash-lights"><span class="item-label">No dashboard warning lights illuminated</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-dash-lights">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-dash-lights">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-dash-lights"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-dash-lights"></textarea></div>
+        <div class="check-row" data-failnote="efn-seatbelts"><span class="item-label">Seatbelts functional and undamaged (present, not torn or frayed)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-seatbelts">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-seatbelts">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-seatbelts"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-seatbelts"></textarea></div>
+      </div>
+    </div>
+
+    <!-- Glass -->
+    <div class="section" id="es2">
+      <div class="section-header" onclick="toggleSec('es2')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">Glass</span>
+        <span class="sec-badge" id="b-es2">1 item</span>
+      </div>
+      <div class="section-body">
+        <div class="check-row" data-failnote="efn-glass"><span class="item-label">No significant chips, cracks, or starbursts in driver's line of sight</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-glass">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-glass">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-glass"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-glass"></textarea></div>
+      </div>
+    </div>
+
+    <!-- Lights -->
+    <div class="section" id="es3">
+      <div class="section-header" onclick="toggleSec('es3')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">Lights</span>
+        <span class="sec-badge" id="b-es3">2 items</span>
+      </div>
+      <div class="section-body">
+        <div class="check-row" data-failnote="efn-ext-lights"><span class="item-label">All exterior lights operational — headlights (high/low beams), taillights, brake lights, turn signals, hazard flashers, reverse lights, markers</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-ext-lights">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-ext-lights">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-ext-lights"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-ext-lights"></textarea></div>
+        <div class="check-row" data-failnote="efn-lenses"><span class="item-label">No broken/missing light lenses or housings</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-lenses">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-lenses">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-lenses"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-lenses"></textarea></div>
+        <div class="check-row"><span class="item-label">Bulb number(s) required (if any)</span><input class="inline-input" id="ef-bulbs" type="text" placeholder="e.g. H7, 3157"></div>
+      </div>
+    </div>
+
+    <!-- Exterior / Wipers -->
+    <div class="section" id="es4">
+      <div class="section-header" onclick="toggleSec('es4')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">Exterior walk around</span>
+        <span class="sec-badge" id="b-es4">1 item</span>
+      </div>
+      <div class="section-body">
+        <div class="check-row" data-failnote="efn-wipers"><span class="item-label">Wiper blades are not torn</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-wipers">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-wipers">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-wipers"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-wipers"></textarea></div>
+      </div>
+    </div>
+
+    <!-- Under Hood -->
+    <div class="section" id="es5">
+      <div class="section-header" onclick="toggleSec('es5')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">Under hood</span>
+        <span class="sec-badge" id="b-es5">1 item</span>
+      </div>
+      <div class="section-body">
+        <div class="check-row" data-failnote="efn-batt-health"><span class="item-label">Battery health (conduct battery load test)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-batt-health">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-batt-health">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-batt-health"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-batt-health"></textarea></div>
+      </div>
+    </div>
+
+    <!-- Tires -->
+    <div class="section" id="es6">
+      <div class="section-header" onclick="toggleSec('es6')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">Tires &amp; wheels (on lift)</span>
+        <span class="sec-badge" id="b-es6">4 items</span>
+      </div>
+      <div class="section-body">
+        <div class="check-row"><span class="item-label">Tire size</span><input class="inline-input" id="ef-tiresize" type="text" placeholder="e.g. 235/65R17"></div>
+        <div class="table-wrap">
+          <p class="table-note">Tread depth (in 32nds) — minimum 5/32. Check replace if below minimum.</p>
+          <table class="data-table">
+            <thead><tr><th>Position</th><th>Outer</th><th>Middle</th><th>Inner</th><th>Replace?</th></tr></thead>
+            <tbody>
+              <tr><td>Front left</td><td id="etd-t-fl-o"></td><td id="etd-t-fl-m"></td><td id="etd-t-fl-i"></td><td style="text-align:center"><input type="checkbox" id="et-fl-r"></td></tr>
+              <tr><td>Front right</td><td id="etd-t-fr-o"></td><td id="etd-t-fr-m"></td><td id="etd-t-fr-i"></td><td style="text-align:center"><input type="checkbox" id="et-fr-r"></td></tr>
+              <tr><td>Rear left</td><td id="etd-t-rl-o"></td><td id="etd-t-rl-m"></td><td id="etd-t-rl-i"></td><td style="text-align:center"><input type="checkbox" id="et-rl-r"></td></tr>
+              <tr><td>Rear right</td><td id="etd-t-rr-o"></td><td id="etd-t-rr-m"></td><td id="etd-t-rr-i"></td><td style="text-align:center"><input type="checkbox" id="et-rr-r"></td></tr>
+              <tr><td>Spare</td><td id="etd-t-sp-o"></td><td id="etd-t-sp-m"></td><td id="etd-t-sp-i"></td><td style="text-align:center"><input type="checkbox" id="et-sp-r"></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="check-row" data-failnote="efn-tire-damage"><span class="item-label">Tires free of damage (no cuts, bulges, nails, exposed cords; no signs of leaks)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-tire-damage">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-tire-damage">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-tire-damage"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-tire-damage"></textarea></div>
+        <div class="check-row" data-failnote="efn-tire-pressure"><span class="item-label">Tires properly inflated to recommended pressure (per door jamb)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-tire-pressure">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-tire-pressure">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-tire-pressure"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-tire-pressure"></textarea></div>
+        <div class="check-row" data-failnote="efn-lug-nuts"><span class="item-label">All wheel lug nuts present and secure (none missing or loose)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-lug-nuts">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-lug-nuts">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-lug-nuts"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-lug-nuts"></textarea></div>
+        <div class="check-row" data-failnote="efn-rims"><span class="item-label">Wheels/rims in good condition (no cracks or severe damage)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-rims">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-rims">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-rims"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-rims"></textarea></div>
+      </div>
+    </div>
+
+    <!-- Brakes -->
+    <div class="section" id="es7">
+      <div class="section-header" onclick="toggleSec('es7')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">Brakes (on lift)</span>
+        <span class="sec-badge" id="b-es7"></span>
+      </div>
+      <div class="section-body">
+        <div class="table-wrap">
+          <p class="table-note">Brake measurements (in mm) — minimum 4mm pad thickness.</p>
+          <table class="data-table">
+            <thead><tr><th>Position</th><th>Pads (mm)</th><th>Rotors (mm)</th><th>Repl pads?</th><th>Repl rotors?</th></tr></thead>
+            <tbody>
+              <tr data-pos="fl" data-prefix="eb"><td>Front left</td><td id="etd-b-fl-p"></td><td style="padding:0">  <div class="rotor-popup-row" id="rp-eb-fl">    <label>Rotor (mm):</label>    <select id="eb-fl-ro" onchange="checkRotor(this,'eb-fl-rr')"><option value="">—</option></select>    <span class="rotor-replace-flag" id="rflag-eb-fl">⚠ REPLACE</span>  </div></td><td style="text-align:center"><input type="checkbox" id="eb-fl-rp"></td><td style="text-align:center"><input type="checkbox" id="eb-fl-rr"></td></tr>
+              <tr data-pos="fr" data-prefix="eb"><td>Front right</td><td id="etd-b-fr-p"></td><td style="padding:0">  <div class="rotor-popup-row" id="rp-eb-fr">    <label>Rotor (mm):</label>    <select id="eb-fr-ro" onchange="checkRotor(this,'eb-fr-rr')"><option value="">—</option></select>    <span class="rotor-replace-flag" id="rflag-eb-fr">⚠ REPLACE</span>  </div></td><td style="text-align:center"><input type="checkbox" id="eb-fr-rp"></td><td style="text-align:center"><input type="checkbox" id="eb-fr-rr"></td></tr>
+              <tr data-pos="rl" data-prefix="eb"><td>Rear left</td><td id="etd-b-rl-p"></td><td style="padding:0">  <div class="rotor-popup-row" id="rp-eb-rl">    <label>Rotor (mm):</label>    <select id="eb-rl-ro" onchange="checkRotor(this,'eb-rl-rr')"><option value="">—</option></select>    <span class="rotor-replace-flag" id="rflag-eb-rl">⚠ REPLACE</span>  </div></td><td style="text-align:center"><input type="checkbox" id="eb-rl-rp"></td><td style="text-align:center"><input type="checkbox" id="eb-rl-rr"></td></tr>
+              <tr data-pos="rr" data-prefix="eb"><td>Rear right</td><td id="etd-b-rr-p"></td><td style="padding:0">  <div class="rotor-popup-row" id="rp-eb-rr">    <label>Rotor (mm):</label>    <select id="eb-rr-ro" onchange="checkRotor(this,'eb-rr-rr')"><option value="">—</option></select>    <span class="rotor-replace-flag" id="rflag-eb-rr">⚠ REPLACE</span>  </div></td><td style="text-align:center"><input type="checkbox" id="eb-rr-rp"></td><td style="text-align:center"><input type="checkbox" id="eb-rr-rr"></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Steering -->
+    <div class="section" id="es8">
+      <div class="section-header" onclick="toggleSec('es8')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">Steering &amp; suspension</span>
+        <span class="sec-badge" id="b-es8">7 items</span>
+      </div>
+      <div class="section-body">
+        <div class="check-row" data-failnote="efn-tie-rods"><span class="item-label">No excessive play in inner/outer tie rods</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-tie-rods">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-tie-rods">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-tie-rods"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-tie-rods"></textarea></div>
+        <div class="check-row" data-failnote="efn-ball-joints"><span class="item-label">No excessive play in upper/lower ball joints</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-ball-joints">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-ball-joints">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-ball-joints"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-ball-joints"></textarea></div>
+        <div class="check-row" data-failnote="efn-control-arms"><span class="item-label">Control arms and bushings in good condition</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-control-arms">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-control-arms">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-control-arms"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-control-arms"></textarea></div>
+        <div class="check-row" data-failnote="efn-sway-bar"><span class="item-label">Sway bar links/bushings secure and not worn</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-sway-bar">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-sway-bar">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-sway-bar"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-sway-bar"></textarea></div>
+        <div class="check-row" data-failnote="efn-steering-rack"><span class="item-label">Steering gear/rack free of leaks</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-steering-rack">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-steering-rack">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-steering-rack"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-steering-rack"></textarea></div>
+        <div class="check-row" data-failnote="efn-shocks"><span class="item-label">Shocks/struts not leaking and mounted securely</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-shocks">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-shocks">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-shocks"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-shocks"></textarea></div>
+        <div class="check-row" data-failnote="efn-bearings"><span class="item-label">Front wheel bearings free of play (no noise or looseness)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-bearings">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-bearings">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-bearings"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-bearings"></textarea></div>
+      </div>
+    </div>
+
+    <!-- Drive Test -->
+    <div class="section" id="es9">
+      <div class="section-header" onclick="toggleSec('es9')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">Drive test</span>
+        <span class="sec-badge" id="b-es9">3 items</span>
+      </div>
+      <div class="section-body">
+        <div class="check-row" data-failnote="efn-drive-steering"><span class="item-label">Steering operates normally (no excessive play or vibration)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-drive-steering">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-drive-steering">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-drive-steering"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-drive-steering"></textarea></div>
+        <div class="check-row" data-failnote="efn-service-brakes"><span class="item-label">Service brakes function properly (no vibrations, grinding, or squealing during braking)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-service-brakes">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-service-brakes">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-service-brakes"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-service-brakes"></textarea></div>
+        <div class="check-row" data-failnote="efn-park-brake"><span class="item-label">Parking brake holds vehicle and releases properly (dash indicator light operates)</span><div class="pf-group"><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-park-brake">Pass</button><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-park-brake">Fail</button></div></div>
+        <div class="fail-note-row" id="efn-park-brake"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-park-brake"></textarea></div>
+      </div>
+    </div>
+
+    <!-- Admin -->
+    <div class="section" id="es10">
+      <div class="section-header" onclick="toggleSec('es10')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">To be completed by admin</span>
+        <span class="sec-badge" id="b-es10">2 items</span>
+      </div>
+      <div class="section-body">
+        <div class="check-row" data-failnote="efn-oil-change"><span class="item-label">Oil change required? (5k miles or 180 days)</span><div class="pf-group"><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-oil-change">Yes — Change needed</button><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-oil-change">No — Pass</button></div></div>
+        <div class="fail-note-row" id="efn-oil-change"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-oil-change"></textarea></div>
+        <div class="check-row"><span class="item-label">Oil capacity &amp; viscosity</span><input class="inline-input" id="ef-oil" type="text" placeholder="e.g. 5W-30, 5.5qt"></div>
+        <label class="wash-row" style="padding:10px 16px;border-bottom:1px solid var(--border);"><input type="checkbox" id="ef-tire-rotation" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;accent-color:#185FA5;"> <span style="font-size:13px;">Add tire rotation in Auto Integrate <span style="color:var(--gray-400);font-size:12px;">(if oil change required)</span></span></label>
+        <div class="check-row" data-failnote="efn-air-filter"><span class="item-label">Air filter required? (30k miles)</span><div class="pf-group"><button class="pf-btn fail" onclick="setPF(this,'fail')" data-key="e-air-filter">Yes — Replace</button><button class="pf-btn pass" onclick="setPF(this,'pass')" data-key="e-air-filter">No — Pass</button></div></div>
+        <div class="fail-note-row" id="efn-air-filter"><div class="fail-note-label">✗ Failure note</div><textarea placeholder="Describe the issue..." id="fnt-e-air-filter"></textarea></div>
+        <label class="wash-row" style="padding:10px 16px;"><input type="checkbox" id="ef-tire-pressure-ai" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;accent-color:#185FA5;"> <span style="font-size:13px;">Check &amp; adjust tire pressure in Auto Integrate <span style="color:var(--gray-400);font-size:12px;">(required — free)</span></span></label>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="section" id="es11">
+      <div class="section-header" onclick="toggleSec('es11')">
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+        <span class="sec-title">Inspector notes &amp; additional comments</span>
+        <span class="sec-badge" id="b-es11"></span>
+      </div>
+      <div class="section-body">
+        <textarea class="notes-area" id="ef-notes" placeholder="Enter failure details, causes, or any additional notes here..."></textarea>
+      </div>
+    </div>
+
+    <p class="footer-note">After completing all sections, tap "Download PDF" — then upload the file to Body Shop Connect.</p>
+  </div>
+  <!-- END ENTERPRISE FORM -->
+
 </div>
 
 <script>
@@ -746,10 +1015,27 @@ function setPF(btn, val) {
   updateSectionBadges();
 }
 
+
+var currentForm = 'merchants';
+
+function switchForm(form) {
+  currentForm = form;
+  document.getElementById('merchants-form').style.display = form === 'merchants' ? '' : 'none';
+  document.getElementById('enterprise-form').style.display = form === 'enterprise' ? '' : 'none';
+  document.getElementById('tog-mf').classList.toggle('active', form === 'merchants');
+  document.getElementById('tog-ent').classList.toggle('active', form === 'enterprise');
+  document.getElementById('form-subtitle-text').textContent = form === 'merchants'
+    ? 'Merchants Fleet — Vehicle Inspection Checklist'
+    : 'Enterprise — Vehicle Inspection Checklist';
+  updateCounts();
+  updateSectionBadges();
+}
+
 function updateCounts() {
-  const p = document.querySelectorAll('.pf-btn.pass.active, .pf-btn.yes.active').length;
-  const f = document.querySelectorAll('.pf-btn.fail.active, .pf-btn.no.active').length;
-  const t = document.querySelectorAll('.pf-group').length;
+  const scope = document.getElementById(currentForm === 'merchants' ? 'merchants-form' : 'enterprise-form');
+  const p = scope.querySelectorAll('.pf-btn.pass.active, .pf-btn.yes.active').length;
+  const f = scope.querySelectorAll('.pf-btn.fail.active, .pf-btn.no.active').length;
+  const t = scope.querySelectorAll('.pf-group').length;
   document.getElementById('cp').textContent = '✓ Pass: ' + p;
   document.getElementById('cf').textContent = '✗ Fail: ' + f;
   document.getElementById('cn').textContent = 'Pending: ' + (t - p - f);
@@ -759,26 +1045,29 @@ function updateCounts() {
 }
 
 function updateSectionBadges() {
-  for (let i = 1; i <= 12; i++) {
-    const sec = document.getElementById('s' + i);
-    if (!sec) continue;
-    const badge = document.getElementById('b-s' + i);
-    if (!badge) continue;
-    const groups = sec.querySelectorAll('.pf-group');
-    if (groups.length === 0) continue;
-    const passes = sec.querySelectorAll('.pf-btn.pass.active, .pf-btn.yes.active').length;
-    const fails = sec.querySelectorAll('.pf-btn.fail.active, .pf-btn.no.active').length;
-    if (fails > 0) {
-      badge.textContent = fails + ' fail' + (fails > 1 ? 's' : '');
-      badge.className = 'sec-badge has-fail';
-    } else if (passes === groups.length) {
-      badge.textContent = 'All pass';
-      badge.className = 'sec-badge all-pass';
-    } else {
-      badge.textContent = passes + '/' + groups.length;
-      badge.className = 'sec-badge';
+  const prefixes = currentForm === 'merchants' ? [['s', 12]] : [['es', 11]];
+  prefixes.forEach(([prefix, max]) => {
+    for (let i = 1; i <= max; i++) {
+      const sec = document.getElementById(prefix + i);
+      if (!sec) continue;
+      const badge = document.getElementById('b-' + prefix + i);
+      if (!badge) continue;
+      const groups = sec.querySelectorAll('.pf-group');
+      if (groups.length === 0) continue;
+      const passes = sec.querySelectorAll('.pf-btn.pass.active, .pf-btn.yes.active').length;
+      const fails = sec.querySelectorAll('.pf-btn.fail.active, .pf-btn.no.active').length;
+      if (fails > 0) {
+        badge.textContent = fails + ' fail' + (fails > 1 ? 's' : '');
+        badge.className = 'sec-badge has-fail';
+      } else if (passes === groups.length) {
+        badge.textContent = 'All pass';
+        badge.className = 'sec-badge all-pass';
+      } else {
+        badge.textContent = passes + '/' + groups.length;
+        badge.className = 'sec-badge';
+      }
     }
-  }
+  });
 }
 
 function toggleSec(id) {
@@ -792,12 +1081,14 @@ function toggleSec(id) {
 
 function resetForm() {
   if (!confirm('Reset all fields? This cannot be undone.')) return;
-  document.querySelectorAll('.pf-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('input[type=text], input[type=number]').forEach(i => { if (i.id !== 'f-date') i.value = ''; });
-  document.querySelectorAll('.fail-note-row').forEach(el => { el.classList.remove('visible'); el.querySelector('textarea').value = ''; });
-  document.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
-  document.getElementById('f-notes').value = '';
-  document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+  const scope = document.getElementById(currentForm === 'merchants' ? 'merchants-form' : 'enterprise-form');
+  scope.querySelectorAll('.pf-btn').forEach(b => b.classList.remove('active'));
+  scope.querySelectorAll('input[type=text], input[type=number]').forEach(i => { if (i.id !== 'f-date' && i.id !== 'ef-date') i.value = ''; });
+  scope.querySelectorAll('.fail-note-row').forEach(el => { el.classList.remove('visible'); el.querySelector('textarea').value = ''; });
+  scope.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+  scope.querySelectorAll('textarea').forEach(t => t.value = '');
+  const dateId = currentForm === 'merchants' ? 'f-date' : 'ef-date';
+  document.getElementById(dateId).value = new Date().toISOString().split('T')[0];
   updateCounts();
   updateSectionBadges();
 }
@@ -808,6 +1099,9 @@ function getPF(key) {
   const active = document.querySelector(`.pf-btn.active[data-key="${key}"]`);
   if (!active) return '—';
   const txt = active.textContent.trim();
+  // Normalize compound labels to simple values for PDF
+  if (txt.startsWith('Yes')) return 'Yes';
+  if (txt.startsWith('No')) return 'No';
   return txt;
 }
 
@@ -869,15 +1163,18 @@ function genPDF() {
       }
 
       // Title block
-      doc.setFillColor(24, 95, 165); doc.rect(0, 0, W, 36, 'F');
+      const isEnt = currentForm === 'enterprise';
+      const titleColor = isEnt ? [26, 107, 60] : [24, 95, 165];
+      doc.setFillColor(...titleColor); doc.rect(0, 0, W, 36, 'F');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(255, 255, 255);
-      doc.text('Merchants Fleet', ml, 23);
+      doc.text(isEnt ? 'Enterprise' : 'Merchants Fleet', ml, 23);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
       doc.text('Vehicle Inspection Checklist', ml, 34);
       y = 50;
 
       // Vehicle info grid
-      const info = [['Date', gv('f-date')], ['VIN (last 8)', gv('f-vin')], ['Mileage', gv('f-mileage')], ['Inspector', gv('f-inspector')], ['License plate', gv('f-plate')], ['State', gv('f-state')]];
+      const pfx = isEnt ? 'ef' : 'f';
+      const info = [['Date', gv(pfx+'-date')], ['VIN (last 8)', gv(pfx+'-vin')], ['Mileage', gv(pfx+'-mileage')], ['Inspector', gv(pfx+'-inspector')], ['License plate', gv(pfx+'-plate')], ['State', gv(pfx+'-state')]];
       for (let i = 0; i < info.length; i += 2) {
         chk(13);
         [[info[i], ml], [info[i + 1] || null, ml + cw / 2 + 10]].forEach(([item, x]) => {
@@ -891,7 +1188,17 @@ function genPDF() {
       }
       y += 4; rule([180, 178, 170]); y += 2;
 
-      const checkSections = [
+      const checkSections = isEnt ? [
+        { title: "Driver's seat", items: [["No dashboard warning lights illuminated", "e-dash-lights"], ["Seatbelts functional and undamaged", "e-seatbelts"]] },
+        { title: "Glass", items: [["No significant chips, cracks, or starbursts in driver's line of sight", "e-glass"]] },
+        { title: "Lights", items: [["All exterior lights operational", "e-ext-lights"], ["No broken/missing light lenses or housings", "e-lenses"]] },
+        { title: "Exterior walk around", items: [["Wiper blades not torn", "e-wipers"]] },
+        { title: "Under hood", items: [["Battery health (load test)", "e-batt-health"]] },
+        { title: "Tires & wheels", items: [["Tires free of damage", "e-tire-damage"], ["Tires properly inflated (per door jamb)", "e-tire-pressure"], ["All wheel lug nuts present and secure", "e-lug-nuts"], ["Wheels/rims in good condition", "e-rims"]] },
+        { title: "Steering & suspension", items: [["No excessive play in tie rods", "e-tie-rods"], ["No excessive play in ball joints", "e-ball-joints"], ["Control arms and bushings in good condition", "e-control-arms"], ["Sway bar links/bushings secure and not worn", "e-sway-bar"], ["Steering gear/rack free of leaks", "e-steering-rack"], ["Shocks/struts not leaking, mounted securely", "e-shocks"], ["Front wheel bearings free of play", "e-bearings"]] },
+        { title: "Drive test", items: [["Steering operates normally", "e-drive-steering"], ["Service brakes function properly", "e-service-brakes"], ["Parking brake holds and releases properly", "e-park-brake"]] },
+        { title: "Admin", items: [["Oil change required? (5k mi or 180 days)", "e-oil-change"], ["Air filter required? (30k miles)", "e-air-filter"]] }
+      ] : [
         { title: "Driver's seat", items: [["No dashboard warning lights illuminated", "dash-lights"], ["Seatbelts functional and undamaged", "seatbelts"], ["All interior equipment works", "interior-equip"], ["At least one working key present", "key"], ["Registration current, documents in glovebox", "registration"], ["DOT inspection up-to-date (if required)", "dot"]] },
         { title: "Glass", items: [["Windshield no cracks impairing safety", "windshield-crack"], ["No chips/starbursts in driver's line of sight", "windshield-chips"], ["Side & rear windows intact", "side-windows"]] },
         { title: "Lights", items: [["All exterior lights operational", "ext-lights"], ["Auxiliary lights functional (if equipped)", "aux-lights"], ["No broken/missing light lenses or housings", "lenses"]] },
@@ -916,7 +1223,8 @@ function genPDF() {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(136, 135, 128);
       ['Position', 'Outer', 'Middle', 'Inner', 'Replace?'].forEach((h, i) => doc.text(h, tc[i], y + 9));
       y += 14; rule();
-      [['Front left', 't-fl-o', 't-fl-m', 't-fl-i', 't-fl-r'], ['Front right', 't-fr-o', 't-fr-m', 't-fr-i', 't-fr-r'], ['Rear left', 't-rl-o', 't-rl-m', 't-rl-i', 't-rl-r'], ['Rear right', 't-rr-o', 't-rr-m', 't-rr-i', 't-rr-r'], ['Spare', 't-sp-o', 't-sp-m', 't-sp-i', 't-sp-r']].forEach(([pos, ...ids]) => {
+      const tp = isEnt ? 'et-' : 't-';
+      [['Front left', tp+'fl-o', tp+'fl-m', tp+'fl-i', tp+'fl-r'], ['Front right', tp+'fr-o', tp+'fr-m', tp+'fr-i', tp+'fr-r'], ['Rear left', tp+'rl-o', tp+'rl-m', tp+'rl-i', tp+'rl-r'], ['Rear right', tp+'rr-o', tp+'rr-m', tp+'rr-i', tp+'rr-r'], ['Spare', tp+'sp-o', tp+'sp-m', tp+'sp-i', tp+'sp-r']].forEach(([pos, ...ids]) => {
         chk(14);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50);
         doc.text(pos, tc[0], y + 9);
@@ -935,7 +1243,8 @@ function genPDF() {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(136, 135, 128);
       ['Position', 'Pads (mm)', 'Rotors (mm)', 'Repl pads?', 'Repl rotors?'].forEach((h, i) => doc.text(h, bc[i], y + 9));
       y += 14; rule();
-      [['Front left', 'b-fl-p', 'b-fl-ro', 'b-fl-rp', 'b-fl-rr'], ['Front right', 'b-fr-p', 'b-fr-ro', 'b-fr-rp', 'b-fr-rr'], ['Rear left', 'b-rl-p', 'b-rl-ro', 'b-rl-rp', 'b-rl-rr'], ['Rear right', 'b-rr-p', 'b-rr-ro', 'b-rr-rp', 'b-rr-rr']].forEach(([pos, ...ids]) => {
+      const bp = isEnt ? 'eb-' : 'b-';
+      [[bp+'fl-p', bp+'fl-ro', bp+'fl-rp', bp+'fl-rr'], [bp+'fr-p', bp+'fr-ro', bp+'fr-rp', bp+'fr-rr'], [bp+'rl-p', bp+'rl-ro', bp+'rl-rp', bp+'rl-rr'], [bp+'rr-p', bp+'rr-ro', bp+'rr-rp', bp+'rr-rr']].map((ids,i) => [['Front left','Front right','Rear left','Rear right'][i], ...ids]).forEach(([pos, ...ids]) => {
         chk(14);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50);
         doc.text(pos, bc[0], y + 9);
@@ -951,17 +1260,22 @@ function genPDF() {
       // Notes & extras
       chk(60);
       secHead('Additional info');
-      fldRow('Tire size', gv('f-tiresize'));
-      fldRow('Bulbs required', gv('f-bulbs'));
-      fldRow('Oil capacity/viscosity', gv('f-oil'));
-      const cleaning = [];
-      if (document.getElementById('w-cargo').checked) cleaning.push('Cargo van ($150)');
-      if (document.getElementById('w-pass').checked) cleaning.push('Passenger van ($180)');
-      if (document.getElementById('w-tire').checked) cleaning.push('Tire pressure check (free)');
-      fldRow('Cleaning', cleaning.length ? cleaning.join(', ') : 'None selected');
+      fldRow('Tire size', gv(pfx+'-tiresize'));
+      fldRow('Bulbs required', gv(pfx+'-bulbs'));
+      fldRow('Oil capacity/viscosity', gv(pfx+'-oil'));
+      if (!isEnt) {
+        const cleaning = [];
+        if (document.getElementById('w-cargo').checked) cleaning.push('Cargo van ($150)');
+        if (document.getElementById('w-pass').checked) cleaning.push('Passenger van ($180)');
+        if (document.getElementById('w-tire').checked) cleaning.push('Tire pressure check (free)');
+        fldRow('Cleaning', cleaning.length ? cleaning.join(', ') : 'None selected');
+      } else {
+        fldRow('Tire rotation in Auto Integrate', gcb('ef-tire-rotation') === 'YES' ? 'Added ✓' : 'Not added');
+        fldRow('Tire pressure check (Auto Integrate)', gcb('ef-tire-pressure-ai') === 'YES' ? 'Completed ✓' : 'Pending');
+      }
       y += 4;
 
-      const notes = document.getElementById('f-notes').value.trim();
+      const notes = document.getElementById(isEnt ? 'ef-notes' : 'f-notes').value.trim();
       if (notes) {
         chk(20);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(136, 135, 128);
@@ -991,9 +1305,10 @@ function genPDF() {
         doc.text('Page ' + i + ' of ' + pages, W - mr, 750, { align: 'right' });
       }
 
-      const vin = gv('f-vin').replace(/[^a-zA-Z0-9]/g, '');
+      const vin = gv(pfx+'-vin').replace(/[^a-zA-Z0-9]/g, '');
+      const formLabel = isEnt ? 'Enterprise' : 'MerchantsFleet';
       const dt = gv('f-date').replace(/-/g, '');
-      doc.save('MerchantsFleet_Inspection_' + (vin !== '—' ? vin : 'VIN') + '_' + dt + '.pdf');
+      doc.save(formLabel + '_Inspection_' + (vin !== '—' ? vin : 'VIN') + '_' + dt + '.pdf');
     } catch (e) {
       alert('PDF generation failed: ' + e.message);
     }
@@ -1028,12 +1343,17 @@ function makeTireSelect(id) {
   return sel;
 }
 
-// Build brake pad dropdowns (0-12mm) with color coding
+// Build brake pad dropdowns (Good + 0-12mm) with color coding and rotor popup
 function makeBrakeSelect(id) {
   const sel = document.createElement('select');
   sel.id = id;
+  // Blank placeholder
   const blank = document.createElement('option');
   blank.value = ''; blank.textContent = '—'; sel.appendChild(blank);
+  // Good option
+  const good = document.createElement('option');
+  good.value = 'good'; good.textContent = '✓ Good'; sel.appendChild(good);
+  // 0-12mm options
   for (let i = 0; i <= 12; i++) {
     const opt = document.createElement('option');
     opt.value = String(i);
@@ -1041,17 +1361,82 @@ function makeBrakeSelect(id) {
     sel.appendChild(opt);
   }
   sel.addEventListener('change', function() {
-    const v = parseInt(this.value);
     this.className = '';
-    if (!isNaN(v)) {
-      if (v <= 3) this.classList.add('danger');
-      else if (v <= 4) this.classList.add('warn');
+    const v = parseInt(this.value);
+    if (this.value === 'good') {
+      this.style.background = '#EAF3DE';
+      this.style.borderColor = '#639922';
+      this.style.color = '#3B6D11';
+    } else {
+      this.style.background = '';
+      this.style.borderColor = '';
+      this.style.color = '';
+      if (!isNaN(v)) {
+        if (v <= 3) this.classList.add('danger');
+        else if (v <= 4) this.classList.add('warn');
+      }
+    }
+    // Show/hide rotor popup — extract position from select id
+    // id format: b-fl-p or eb-fl-p
+    const parts = id.split('-');
+    const prefix = parts[0] === 'eb' ? 'eb' : 'b';
+    const pos = parts.slice(parts[0] === 'eb' ? 1 : 1, -1).join('-');
+    const rotorPopup = document.getElementById('rp-' + prefix + '-' + pos);
+    if (rotorPopup) {
+      if (this.value !== 'good' && !isNaN(v) && v < 5) {
+        rotorPopup.classList.add('visible');
+      } else {
+        rotorPopup.classList.remove('visible');
+        const rotSel = document.getElementById(prefix + '-' + pos + '-ro');
+        if (rotSel) { rotSel.value = ''; rotSel.className = ''; }
+        const flag = document.getElementById('rflag-' + prefix + '-' + pos);
+        if (flag) flag.classList.remove('visible');
+        const rotCb = document.getElementById(prefix + '-' + pos + '-rr');
+        if (rotCb) rotCb.checked = false;
+      }
     }
   });
   return sel;
 }
 
-// Inject tire selects into table cells
+function checkRotor(sel, replId) {
+  const v = parseInt(sel.value);
+  sel.className = '';
+  const flagId = sel.closest('.rotor-popup-row').querySelector('.rotor-replace-flag').id;
+  const flag = document.getElementById(flagId);
+  const repl = document.getElementById(replId);
+  if (!isNaN(v)) {
+    if (v <= 20) {
+      sel.classList.add('danger');
+      if (flag) flag.classList.add('visible');
+      if (repl) repl.checked = true;
+    } else {
+      if (flag) flag.classList.remove('visible');
+      if (repl) repl.checked = false;
+    }
+  } else {
+    if (flag) flag.classList.remove('visible');
+    if (repl) repl.checked = false;
+  }
+}
+
+// Build rotor size dropdown (1-40mm)
+function makeRotorSelect(id, replId) {
+  const sel = document.createElement('select');
+  sel.id = id;
+  sel.setAttribute('onchange', 'checkRotor(this,\'' + replId + '\')');
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '—'; sel.appendChild(blank);
+  for (let i = 1; i <= 40; i++) {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = i + ' mm';
+    sel.appendChild(opt);
+  }
+  return sel;
+}
+
+// Inject tire selects into table cells — merchants
 [['t-fl-o','t-fl-m','t-fl-i'],['t-fr-o','t-fr-m','t-fr-i'],
  ['t-rl-o','t-rl-m','t-rl-i'],['t-rr-o','t-rr-m','t-rr-i'],
  ['t-sp-o','t-sp-m','t-sp-i']].forEach(function(ids) {
@@ -1061,11 +1446,57 @@ function makeBrakeSelect(id) {
   });
 });
 
-// Inject brake pad selects into table cells
+// Inject tire selects — enterprise
+// cell IDs are etd-t-fl-o, select IDs are et-fl-o
+[['fl-o','fl-m','fl-i'],['fr-o','fr-m','fr-i'],
+ ['rl-o','rl-m','rl-i'],['rr-o','rr-m','rr-i'],
+ ['sp-o','sp-m','sp-i']].forEach(function(ids) {
+  ids.forEach(function(pos) {
+    var td = document.getElementById('etd-t-' + pos);
+    if (td) td.appendChild(makeTireSelect('et-' + pos));
+  });
+});
+
+// Inject brake pad selects — merchants
 ['b-fl-p','b-fr-p','b-rl-p','b-rr-p'].forEach(function(id) {
   var td = document.getElementById('td-' + id);
   if (td) td.appendChild(makeBrakeSelect(id));
 });
+
+// Inject brake pad selects — enterprise
+// cell IDs are etd-b-fl-p, select IDs are eb-fl-p
+['fl-p','fr-p','rl-p','rr-p'].forEach(function(pos) {
+  var td = document.getElementById('etd-b-' + pos);
+  if (td) td.appendChild(makeBrakeSelect('eb-' + pos));
+});
+
+// Inject rotor dropdowns into popup rows — merchants
+['fl','fr','rl','rr'].forEach(function(pos) {
+  var popup = document.getElementById('rp-b-' + pos);
+  if (popup) {
+    var rotSel = popup.querySelector('select');
+    if (rotSel) {
+      // replace bare select with fully populated one
+      var newSel = makeRotorSelect('b-' + pos + '-ro', 'b-' + pos + '-rr');
+      rotSel.parentNode.replaceChild(newSel, rotSel);
+    }
+  }
+});
+
+// Inject rotor dropdowns into popup rows — enterprise
+['fl','fr','rl','rr'].forEach(function(pos) {
+  var popup = document.getElementById('rp-eb-' + pos);
+  if (popup) {
+    var rotSel = popup.querySelector('select');
+    if (rotSel) {
+      var newSel = makeRotorSelect('eb-' + pos + '-ro', 'eb-' + pos + '-rr');
+      rotSel.parentNode.replaceChild(newSel, rotSel);
+    }
+  }
+});
+
+// Set enterprise date
+document.getElementById('ef-date').value = new Date().toISOString().split('T')[0];
 </script>
 </body>
 </html>
