@@ -1082,11 +1082,32 @@ function toggleSec(id) {
 function resetForm() {
   if (!confirm('Reset all fields? This cannot be undone.')) return;
   const scope = document.getElementById(currentForm === 'merchants' ? 'merchants-form' : 'enterprise-form');
+  // Clear pass/fail buttons
   scope.querySelectorAll('.pf-btn').forEach(b => b.classList.remove('active'));
+  // Clear text and number inputs
   scope.querySelectorAll('input[type=text], input[type=number]').forEach(i => { if (i.id !== 'f-date' && i.id !== 'ef-date') i.value = ''; });
+  // Clear ALL select dropdowns (tires, brakes, rotors) and reset their styling
+  scope.querySelectorAll('select').forEach(s => {
+    s.value = '';
+    s.className = '';
+    s.style.background = '';
+    s.style.borderColor = '';
+    s.style.color = '';
+  });
+  // Hide rotor popup rows and clear their flags
+  scope.querySelectorAll('.rotor-popup-row').forEach(el => {
+    el.classList.remove('visible');
+  });
+  scope.querySelectorAll('.rotor-replace-flag').forEach(el => {
+    el.classList.remove('visible');
+  });
+  // Hide fail note rows and clear their textareas
   scope.querySelectorAll('.fail-note-row').forEach(el => { el.classList.remove('visible'); el.querySelector('textarea').value = ''; });
+  // Clear checkboxes
   scope.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+  // Clear all textareas
   scope.querySelectorAll('textarea').forEach(t => t.value = '');
+  // Reset date
   const dateId = currentForm === 'merchants' ? 'f-date' : 'ef-date';
   document.getElementById(dateId).value = new Date().toISOString().split('T')[0];
   updateCounts();
